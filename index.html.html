@@ -1,0 +1,615 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Professional Trading Tool</title>
+    <script src="https://unpkg.com/lightweight-charts/dist/lightweight-charts.standalone.production.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.0.1/socket.io.js"></script>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #1e3c72 0%, #2a5298 100%);
+            color: #ffffff;
+            overflow-x: hidden;
+        }
+        
+        .header {
+            background: rgba(0, 0, 0, 0.8);
+            padding: 15px 30px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            backdrop-filter: blur(10px);
+            border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+        }
+        
+        .logo {
+            font-size: 24px;
+            font-weight: bold;
+            color: #00ff88;
+        }
+        
+        .status {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        
+        .status-indicator {
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+            background: #ff4444;
+            animation: pulse 2s infinite;
+        }
+        
+        .status-indicator.live {
+            background: #00ff88;
+        }
+        
+        @keyframes pulse {
+            0% { opacity: 1; }
+            50% { opacity: 0.5; }
+            100% { opacity: 1; }
+        }
+        
+        .container {
+            display: flex;
+            height: calc(100vh - 70px);
+        }
+        
+        .sidebar {
+            width: 350px;
+            background: rgba(0, 0, 0, 0.9);
+            padding: 20px;
+            overflow-y: auto;
+            backdrop-filter: blur(15px);
+            border-right: 1px solid rgba(255, 255, 255, 0.1);
+        }
+        
+        .main-content {
+            flex: 1;
+            padding: 20px;
+            display: flex;
+            flex-direction: column;
+        }
+        
+        .controls {
+            background: rgba(0, 0, 0, 0.7);
+            padding: 20px;
+            border-radius: 15px;
+            margin-bottom: 20px;
+            backdrop-filter: blur(10px);
+        }
+        
+        .control-group {
+            margin-bottom: 15px;
+        }
+        
+        .control-group label {
+            display: block;
+            margin-bottom: 5px;
+            font-weight: 500;
+            color: #cccccc;
+        }
+        
+        .control-group select,
+        .control-group button {
+            width: 100%;
+            padding: 12px;
+            background: rgba(255, 255, 255, 0.1);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            border-radius: 8px;
+            color: white;
+            font-size: 14px;
+            transition: all 0.3s ease;
+        }
+        
+        .control-group select:focus,
+        .control-group button:hover {
+            background: rgba(255, 255, 255, 0.2);
+            border-color: #00ff88;
+            outline: none;
+        }
+        
+        .btn-primary {
+            background: linear-gradient(45deg, #00ff88, #00cc6a) !important;
+            border: none !important;
+            font-weight: bold;
+            cursor: pointer;
+        }
+        
+        .btn-primary:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(0, 255, 136, 0.3);
+        }
+        
+        .chart-container {
+            flex: 1;
+            background: rgba(0, 0, 0, 0.8);
+            border-radius: 15px;
+            padding: 20px;
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+        }
+        
+        .chart {
+            width: 100%;
+            height: 500px;
+            border-radius: 10px;
+            overflow: hidden;
+        }
+        
+        .signals-panel {
+            background: rgba(0, 0, 0, 0.7);
+            padding: 20px;
+            border-radius: 15px;
+            margin-top: 20px;
+            backdrop-filter: blur(10px);
+        }
+        
+        .signals-panel h3 {
+            color: #00ff88;
+            margin-bottom: 15px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        
+        .signal-item {
+            background: rgba(255, 255, 255, 0.05);
+            padding: 15px;
+            margin: 10px 0;
+            border-radius: 10px;
+            border-left: 4px solid #00ff88;
+            transition: all 0.3s ease;
+        }
+        
+        .signal-item:hover {
+            background: rgba(255, 255, 255, 0.1);
+            transform: translateX(5px);
+        }
+        
+        .signal-item.bearish {
+            border-left-color: #ff4444;
+        }
+        
+        .signal-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 10px;
+        }
+        
+        .pattern-name {
+            font-weight: bold;
+            font-size: 16px;
+        }
+        
+        .confidence {
+            background: rgba(0, 255, 136, 0.2);
+            padding: 4px 8px;
+            border-radius: 15px;
+            font-size: 12px;
+        }
+        
+        .signal-details {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(100px, 1fr));
+            gap: 10px;
+            margin-top: 10px;
+        }
+        
+        .detail-item {
+            text-align: center;
+            padding: 8px;
+            background: rgba(255, 255, 255, 0.05);
+            border-radius: 5px;
+        }
+        
+        .detail-label {
+            font-size: 11px;
+            color: #cccccc;
+            margin-bottom: 2px;
+        }
+        
+        .detail-value {
+            font-weight: bold;
+            color: #ffffff;
+        }
+        
+        .loading {
+            text-align: center;
+            padding: 20px;
+            color: #cccccc;
+        }
+        
+        .loading i {
+            animation: spin 1s linear infinite;
+        }
+        
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+        
+        .market-info {
+            background: rgba(0, 0, 0, 0.7);
+            padding: 15px;
+            border-radius: 10px;
+            margin-bottom: 20px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        
+        .price-display {
+            font-size: 24px;
+            font-weight: bold;
+            color: #00ff88;
+        }
+        
+        .price-change {
+            font-size: 14px;
+            margin-top: 5px;
+        }
+        
+        .price-change.positive {
+            color: #00ff88;
+        }
+        
+        .price-change.negative {
+            color: #ff4444;
+        }
+        
+        /* Mobile Responsive */
+        @media (max-width: 768px) {
+            .container {
+                flex-direction: column;
+            }
+            
+            .sidebar {
+                width: 100%;
+                height: auto;
+                max-height: 40vh;
+            }
+            
+            .header {
+                padding: 10px 15px;
+            }
+            
+            .logo {
+                font-size: 20px;
+            }
+            
+            .chart {
+                height: 400px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <div class="logo">
+            <i class="fas fa-chart-line"></i>
+            Professional Trading Tool
+        </div>
+        <div class="status">
+            <div class="status-indicator" id="statusIndicator"></div>
+            <span id="statusText">Disconnected</span>
+        </div>
+    </div>
+    
+    <div class="container">
+        <div class="sidebar">
+            <div class="controls">
+                <h3><i class="fas fa-cog"></i> Trading Controls</h3>
+                
+                <div class="control-group">
+                    <label><i class="fas fa-globe"></i> Market Type</label>
+                    <select id="marketSelect">
+                        <option value="crypto">Cryptocurrency</option>
+                        <option value="forex">Forex</option>
+                    </select>
+                </div>
+                
+                <div class="control-group">
+                    <label><i class="fas fa-coins"></i> Symbol</label>
+                    <select id="symbolSelect">
+                        <option value="BTCUSDT">BTC/USDT</option>
+                        <option value="ETHUSDT">ETH/USDT</option>
+                        <option value="ADAUSDT">ADA/USDT</option>
+                        <option value="BNBUSDT">BNB/USDT</option>
+                        <option value="XRPUSDT">XRP/USDT</option>
+                    </select>
+                </div>
+                
+                <div class="control-group">
+                    <label><i class="fas fa-clock"></i> Timeframe</label>
+                    <select id="timeframeSelect">
+                        <option value="1m">1 Minute</option>
+                        <option value="5m">5 Minutes</option>
+                        <option value="15m">15 Minutes</option>
+                        <option value="30m">30 Minutes</option>
+                        <option value="1h">1 Hour</option>
+                    </select>
+                </div>
+                
+                <div class="control-group">
+                    <button class="btn-primary" onclick="startAnalysis()">
+                        <i class="fas fa-play"></i> Start Live Analysis
+                    </button>
+                </div>
+                
+                <div class="control-group">
+                    <button onclick="analyzePatterns()">
+                        <i class="fas fa-search"></i> Analyze Patterns
+                    </button>
+                </div>
+            </div>
+            
+            <div class="market-info" id="marketInfo">
+                <div>
+                    <div class="price-display" id="currentPrice">$0.00</div>
+                    <div class="price-change" id="priceChange">+0.00 (0.00%)</div>
+                </div>
+                <div>
+                    <i class="fas fa-chart-area fa-2x"></i>
+                </div>
+            </div>
+            
+            <div class="signals-panel">
+                <h3><i class="fas fa-signal"></i> Trading Signals</h3>
+                <div id="signalsContainer">
+                    <div class="loading">
+                        <i class="fas fa-spinner"></i>
+                        <p>Click "Analyze Patterns" to generate signals...</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <div class="main-content">
+            <div class="chart-container">
+                <h2><i class="fas fa-chart-candlestick"></i> Live Trading Chart</h2>
+                <div id="chart" class="chart"></div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const socket = io();
+        let chart;
+        let candleSeries;
+        let isLiveMode = false;
+        
+        function initChart() {
+            chart = LightweightCharts.createChart(document.getElementById('chart'), {
+                width: document.getElementById('chart').offsetWidth,
+                height: 500,
+                layout: {
+                    backgroundColor: 'transparent',
+                    textColor: '#ffffff',
+                },
+                grid: {
+                    vertLines: { color: 'rgba(255, 255, 255, 0.1)' },
+                    horzLines: { color: 'rgba(255, 255, 255, 0.1)' },
+                },
+                crosshair: { mode: LightweightCharts.CrosshairMode.Normal },
+                timeScale: {
+                    borderColor: 'rgba(255, 255, 255, 0.2)',
+                    timeVisible: true,
+                    secondsVisible: false,
+                },
+                priceScale: { borderColor: 'rgba(255, 255, 255, 0.2)' },
+            });
+            
+            candleSeries = chart.addCandlestickSeries({
+                upColor: '#00ff88',
+                downColor: '#ff4444',
+                borderDownColor: '#ff4444',
+                borderUpColor: '#00ff88',
+                wickDownColor: '#ff4444',
+                wickUpColor: '#00ff88',
+            });
+        }
+        
+        function loadHistoricalData() {
+            const market = document.getElementById('marketSelect').value;
+            const symbol = document.getElementById('symbolSelect').value;
+            const timeframe = document.getElementById('timeframeSelect').value;
+            
+            fetch(`/api/historical/${market}/${symbol}/${timeframe}`)
+                .then(response => response.json())
+                .then(data => {
+                    if (data && data.length > 0) {
+                        candleSeries.setData(data);
+                        updatePriceDisplay(data[data.length - 1]);
+                    }
+                })
+                .catch(error => console.error('Error loading historical data:', error));
+        }
+        
+        function updatePriceDisplay(candle) {
+            const priceElement = document.getElementById('currentPrice');
+            const changeElement = document.getElementById('priceChange');
+            
+            if (candle) {
+                priceElement.textContent = `$${candle.close.toFixed(2)}`;
+                
+                const change = candle.close - candle.open;
+                const changePercent = (change / candle.open) * 100;
+                
+                changeElement.textContent = `${change >= 0 ? '+' : ''}${change.toFixed(2)} (${changePercent.toFixed(2)}%)`;
+                changeElement.className = `price-change ${change >= 0 ? 'positive' : 'negative'}`;
+            }
+        }
+        
+        function startAnalysis() {
+            const market = document.getElementById('marketSelect').value;
+            const symbol = document.getElementById('symbolSelect').value;
+            const timeframe = document.getElementById('timeframeSelect').value;
+            
+            socket.emit('start_live_feed', {
+                market: market,
+                symbol: symbol,
+                interval: timeframe
+            });
+            
+            isLiveMode = true;
+            updateStatus('live', 'Live Mode Active');
+            loadHistoricalData();
+        }
+        
+        function analyzePatterns() {
+            const market = document.getElementById('marketSelect').value;
+            const symbol = document.getElementById('symbolSelect').value;
+            const timeframe = document.getElementById('timeframeSelect').value;
+            
+            document.getElementById('signalsContainer').innerHTML = `
+                <div class="loading">
+                    <i class="fas fa-spinner"></i>
+                    <p>Analyzing patterns...</p>
+                </div>
+            `;
+            
+            fetch(`/api/patterns/${market}/${symbol}/${timeframe}`)
+                .then(response => response.json())
+                .then(patterns => displayPatterns(patterns))
+                .catch(error => {
+                    console.error('Error analyzing patterns:', error);
+                    document.getElementById('signalsContainer').innerHTML = `
+                        <div class="loading">
+                            <i class="fas fa-exclamation-triangle"></i>
+                            <p>Error analyzing patterns. Please try again.</p>
+                        </div>
+                    `;
+                });
+        }
+        
+        function displayPatterns(patterns) {
+            const container = document.getElementById('signalsContainer');
+            
+            if (!patterns || patterns.length === 0) {
+                container.innerHTML = `
+                    <div class="loading">
+                        <i class="fas fa-info-circle"></i>
+                        <p>No patterns detected at this time.</p>
+                    </div>
+                `;
+                return;
+            }
+            
+            container.innerHTML = '';
+            
+            patterns.forEach(pattern => {
+                const signalDiv = document.createElement('div');
+                signalDiv.className = `signal-item ${pattern.type.toLowerCase() === 'bearish' ? 'bearish' : ''}`;
+                
+                const riskReward = pattern.risk_reward ? pattern.risk_reward.toFixed(1) : 'N/A';
+                
+                signalDiv.innerHTML = `
+                    <div class="signal-header">
+                        <div class="pattern-name">${pattern.pattern}</div>
+                        <div class="confidence">${pattern.confidence}%</div>
+                    </div>
+                    <div style="color: #cccccc; font-size: 12px; margin-bottom: 10px;">
+                        ${pattern.description}
+                    </div>
+                    <div class="signal-details">
+                        <div class="detail-item">
+                            <div class="detail-label">Entry</div>
+                            <div class="detail-value">$${pattern.entry.toFixed(2)}</div>
+                        </div>
+                        <div class="detail-item">
+                            <div class="detail-label">Stop Loss</div>
+                            <div class="detail-value">$${pattern.stop_loss.toFixed(2)}</div>
+                        </div>
+                        <div class="detail-item">
+                            <div class="detail-label">Target</div>
+                            <div class="detail-value">$${pattern.target.toFixed(2)}</div>
+                        </div>
+                        <div class="detail-item">
+                            <div class="detail-label">R:R</div>
+                            <div class="detail-value">${riskReward}:1</div>
+                        </div>
+                    </div>
+                `;
+                
+                container.appendChild(signalDiv);
+            });
+        }
+        
+        function updateStatus(status, text) {
+            const indicator = document.getElementById('statusIndicator');
+            const statusText = document.getElementById('statusText');
+            
+            indicator.className = `status-indicator ${status}`;
+            statusText.textContent = text;
+        }
+        
+        socket.on('connect', () => updateStatus('', 'Connected'));
+        socket.on('disconnect', () => {
+            updateStatus('', 'Disconnected');
+            isLiveMode = false;
+        });
+        
+        socket.on('candlestick_update', function(data) {
+            if (data.candle) {
+                candleSeries.update(data.candle);
+                updatePriceDisplay(data.candle);
+            }
+            
+            if (data.patterns && data.patterns.length > 0) {
+                displayPatterns(data.patterns);
+            }
+        });
+        
+        socket.on('feed_started', data => console.log('Live feed started:', data));
+        
+        window.addEventListener('resize', () => {
+            if (chart) {
+                chart.applyOptions({
+                    width: document.getElementById('chart').offsetWidth,
+                });
+            }
+        });
+        
+        document.getElementById('marketSelect').addEventListener('change', function() {
+            const market = this.value;
+            const symbolSelect = document.getElementById('symbolSelect');
+            
+            if (market === 'forex') {
+                symbolSelect.innerHTML = `
+                    <option value="EURUSD=X">EUR/USD</option>
+                    <option value="GBPUSD=X">GBP/USD</option>
+                    <option value="USDJPY=X">USD/JPY</option>
+                    <option value="AUDUSD=X">AUD/USD</option>
+                    <option value="USDCAD=X">USD/CAD</option>
+                `;
+            } else {
+                symbolSelect.innerHTML = `
+                    <option value="BTCUSDT">BTC/USDT</option>
+                    <option value="ETHUSDT">ETH/USDT</option>
+                    <option value="ADAUSDT">ADA/USDT</option>
+                    <option value="BNBUSDT">BNB/USDT</option>
+                    <option value="XRPUSDT">XRP/USDT</option>
+                `;
+            }
+        });
+        
+        document.addEventListener('DOMContentLoaded', function() {
+            initChart();
+            loadHistoricalData();
+        });
+    </script>
+</body>
+</html>
